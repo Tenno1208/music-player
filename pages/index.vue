@@ -4,9 +4,9 @@
 
     <div class="px-4 sm:px-6 space-y-10">
       
-      <div v-if="loadingSpotify" class="flex items-center gap-2 text-rose-500 animate-pulse text-sm py-4">
+      <div class="flex items-center gap-2 text-rose-500 animate-pulse text-sm py-4" v-if="loadingSpotify">
         <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
-        Menghubungkan ke database Spotify...
+        Connecting Spotify core database...
       </div>
       
       <template v-else>
@@ -68,7 +68,6 @@ const fetchTrending = async () => {
         maxResults: 10
       }
     })
-
     tracks.value = data.items || []
   } catch (err) {
     console.error(err)
@@ -82,22 +81,12 @@ const fetchSpotifyKatalog = async () => {
   loadingSpotify.value = true
 
   try {
-    const listArtis = [
-      'Tulus',
-      'Mahalini',
-      'Nadin Amizah',
-      'Hindia',
-      'Rizky Febian'
-    ]
+    const listArtis = ['Tulus', 'Mahalini', 'Nadin Amizah', 'Hindia', 'Rizky Febian']
 
-    // ===== POPULAR ARTISTS =====
-
+    // ===== AMBIL KATALOG POPULAR ARTISTS =====
     const artistPromises = listArtis.map(name =>
       $fetch('/api/spotify-search', {
-        query: {
-          q: name,
-          type: 'artist'
-        }
+        query: { q: name, type: 'artist' }
       })
     )
 
@@ -106,47 +95,40 @@ const fetchSpotifyKatalog = async () => {
     popularArtists.value = artistResults
       .map(res => {
         const artist = res?.artists?.items?.[0]
-
         if (!artist) return null
 
         return {
           id: artist.id,
           name: artist.name,
           description: 'Artist',
-          image:
-            artist.images?.[0]?.url ||
-            'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=200'
+          image: artist.images?.[0]?.url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=200'
         }
       })
       .filter(Boolean)
 
-    // ===== POPULAR ALBUMS =====
-
+    // ===== AMBIL KATALOG POPULAR ALBUMS =====
     const albumData = await $fetch('/api/spotify-search', {
-      query: {
-        q: 'pop indonesia',
-        type: 'album'
-      }
+      query: { q: 'pop indonesia', type: 'album' }
     })
 
     const rawAlbums = albumData?.albums?.items || []
 
-    popularAlbums.value = rawAlbums.map(album => ({
-      id: album.id,
-      name: album.name,
-      description:
-        album.artists?.map(a => a.name).join(', ') ||
-        'Various Artists',
-      image:
-        album.images?.[0]?.url ||
-        'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=200'
-    }))
+    popularAlbums.value = rawAlbums.map(album => {
+      // Ekstrak informasi data artis utama pemilik album
+      const primaryArtist = album.artists?.[0]
 
-    console.log('Artists:', popularArtists.value)
-    console.log('Albums:', popularAlbums.value)
+      return {
+        id: album.id,
+        name: album.name,
+        artistId: primaryArtist?.id || '', // Simpan ID artis untuk kebutuhan redirect klik album
+        artistName: primaryArtist?.name || 'Various Artists',
+        description: album.artists?.map(a => a.name).join(', ') || 'Various Artists',
+        image: album.images?.[0]?.url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=200'
+      }
+    })
 
   } catch (err) {
-    console.error('Spotify Error:', err)
+    console.error('Spotify Catalog Sync Error:', err)
   } finally {
     loadingSpotify.value = false
   }

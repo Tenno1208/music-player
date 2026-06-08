@@ -54,7 +54,16 @@ onMounted(async () => {
         } else if (event.data === window.YT.PlayerState.ENDED) {
           playerStore.isPlaying = false
           stopProgressInterval()
-          // Automatically play next logic could go here
+
+          console.log('VIDEO SELESAI')
+
+          if (playerStore.isRepeat) {
+            ytPlayer.seekTo(0)
+            ytPlayer.playVideo()
+            return
+          }
+
+          playerStore.playNextTrack()
         }
       }
     }

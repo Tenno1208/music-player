@@ -13,6 +13,7 @@
       <div
         v-for="(item, index) in items"
         :key="index"
+        @click="handleItemClick(item)"
         class="flex-shrink-0 w-[135px] sm:w-[180px] bg-zinc-900/40 hover:bg-zinc-800/60 p-3 rounded-xl sm:rounded-2xl cursor-pointer transition-all duration-300 group relative border border-white/5 snap-start"
       >
         <div class="relative w-full aspect-square mb-3 bg-zinc-950 shadow-lg overflow-hidden"
@@ -44,11 +45,24 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   title: { type: String, required: true },
   items: { type: Array, required: true },
   isArtist: { type: Boolean, default: false }
 })
+
+// Fungsi deteksi klik kartu
+const handleItemClick = (item) => {
+  if (props.isArtist) {
+    // Jika baris artis, langsung lempar ke halaman artis berdasarkan ID Spotify aslinya
+    navigateTo(`/artist/${item.id}?name=${encodeURIComponent(item.name)}`)
+  } else {
+    // Jika baris album, arahkan ke artis utama pembuat album tersebut (menggunakan item.artistId yang kita siapkan di bawah)
+    if (item.artistId) {
+      navigateTo(`/artist/${item.artistId}?name=${encodeURIComponent(item.artistName)}`)
+    }
+  }
+}
 </script>
 
 <style scoped>

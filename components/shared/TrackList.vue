@@ -12,7 +12,7 @@
       <div
         v-for="(track, index) in tracks"
         :key="track.id?.videoId || index"
-        @click="player.playTrack(track)"
+        @click="playSong(track)"
         class="flex items-center text-sm px-3 sm:px-4 py-2 rounded-lg hover:bg-white/10 active:bg-white/5 group cursor-pointer transition-colors min-w-0"
       >
         <div class="w-6 sm:w-8 text-center text-zinc-400 flex-shrink-0">
@@ -57,9 +57,19 @@
 <script setup>
 import { usePlayerStore } from '~/stores/player'
 
-defineProps({
-  tracks: { type: Array, required: true }
+const props = defineProps({
+  tracks: {
+    type: Array,
+    required: true
+  }
 })
 
 const player = usePlayerStore()
+
+const playSong = (track) => {
+  console.log('SET QUEUE:', props.tracks.length)
+
+  player.setQueue(props.tracks)
+  player.playTrack(track)
+}
 </script>

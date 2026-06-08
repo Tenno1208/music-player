@@ -5,6 +5,10 @@ export const usePlayerStore = defineStore('player', {
     currentTrack: null,
     isPlaying: false,
     history: [],
+    queue: [],
+    likedTracks: [],
+    isShuffle: true,
+    isRepeat: false,
     isModalOpen: false,
     currentTime: 0,
     duration: 0,
@@ -16,10 +20,8 @@ export const usePlayerStore = defineStore('player', {
       this.currentTrack = track
       this.isPlaying = true
       
-      // Add to history if not already the most recent
-      if (this.history.length === 0 || this.history[0].id.videoId !== track.id.videoId) {
-        // Keep only unique tracks in history, or just push it. Let's filter out if it exists and put it at top.
-        this.history = [track, ...this.history.filter(t => t.id.videoId !== track.id.videoId)]
+      if (this.history.length === 0 || this.history[0].id?.videoId !== track.id?.videoId) {
+        this.history = [track, ...this.history.filter(t => t.id?.videoId !== track.id?.videoId)]
       }
     },
 
@@ -38,7 +40,57 @@ export const usePlayerStore = defineStore('player', {
 
     seekTo(seconds) {
       this.seekRequest = seconds
-      this.currentTime = seconds // optimistic update
-    }
+      this.currentTime = seconds
+    },
+
+    toggleLike(track) {
+      if (!track) return
+      const trackId = track.id?.videoId
+      const index = this.likedTracks.findIndex(t => t.id?.videoId === trackId)
+
+      if (index === -1) {
+        this.likedTracks.push(track)
+      } else {
+        this.likedTracks.splice(index, 1)
+      }
+    },
+
+    isLiked(track) {
+      if (!track) return false
+      return this.likedTracks.some(t => t.id?.videoId === track.id?.videoId)
+    },
+
+    toggleShuffle() {
+      this.isShuffle = !this.isShuffle
+    },
+
+    toggleRepeat() {
+      this.isRepeat = !this.isRepeat
+    },
+
+    setQueue(tracks) {
+      this.queue = tracks
+    },
+
+    addToQueue(track) {
+  this.queue.push(track)
+},
+
+   playNextTrack() {
+  if (!this.queue.length) return
+
+  const currentIndex = this.queue.findIndex(
+    track =>
+      track.id?.videoId ===
+      this.currentTrack?.id?.videoId
+  )
+
+  const nextTrack =
+    this.queue[currentIndex + 1]
+
+  if (nextTrack) {
+    this.playTrack(nextTrack)
+  }
+}
   }
 })

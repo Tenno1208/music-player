@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-[#121212] text-white p-6 md:p-10 flex flex-col">
+  <div class="min-h-screen bg-[#121212] text-white p-6 md:p-10 flex flex-col pb-24">
     <button @click="$router.back()" class="flex items-center gap-2 text-zinc-400 hover:text-white mb-8 transition-colors self-start">
       <Icon name="solar:alt-arrow-left-bold" class="w-6 h-6" />
       <span class="font-bold">Kembali</span>
@@ -30,10 +30,29 @@
             <Icon name="solar:verified-check-bold" class="w-4 h-4" />
             <span>Artis Terverifikasi Spotify (Popularitas: #{{ artistInfo.popularity }})</span>
           </p>
-          <div class="mt-6 flex gap-3 justify-center md:justify-start">
-            <button class="bg-rose-500 hover:bg-rose-600 px-6 py-2.5 rounded-full font-bold text-sm transition-transform active:scale-95 shadow-lg shadow-rose-500/20">
-              Ikuti Artis
+          <div class="mt-6 flex flex-wrap gap-3 justify-center md:justify-start">
+
+            <button
+              @click="playAllTracks"
+              class="bg-rose-500 hover:bg-rose-600 px-6 py-2.5 rounded-full font-bold text-sm transition-transform active:scale-95"
+            >
+              ▶ Putar Semua
             </button>
+
+            <button
+              @click="addAllToQueue"
+              class="bg-zinc-800 hover:bg-zinc-700 px-6 py-2.5 rounded-full font-bold text-sm transition-transform active:scale-95"
+            >
+              ➕ Tambah Antrian
+            </button>
+
+            <button
+              @click="shuffleAllTracks"
+              class="bg-zinc-800 hover:bg-zinc-700 px-6 py-2.5 rounded-full font-bold text-sm transition-transform active:scale-95"
+            >
+              🔀 Acak
+            </button>
+
           </div>
         </div>
       </div>
@@ -50,6 +69,7 @@
           <div 
             v-for="(track, index) in artistInfo.topTracks" 
             :key="index"
+            @click="handlePlayTrack(track, index)"
             class="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group border border-transparent hover:border-white/5"
           >
             <span class="text-zinc-500 font-bold w-6 text-center group-hover:text-rose-400 transition-colors">{{ index + 1 }}</span>
@@ -58,7 +78,11 @@
               <p class="font-bold text-white truncate group-hover:text-rose-400 transition-colors">{{ track.title }}</p>
               <p class="text-zinc-400 text-xs truncate mt-0.5">{{ artistInfo.name }}</p>
             </div>
-            <Icon name="solar:play-bold" class="w-5 h-5 text-zinc-400 opacity-0 group-hover:opacity-100 transition-all transform scale-90 group-hover:scale-100 group-hover:text-rose-500" />
+            
+            <div class="w-8 h-8 rounded-full flex items-center justify-center transition-all bg-transparent group-hover:bg-rose-500 text-zinc-400 group-hover:text-white">
+              <Icon v-if="loadingTrackIndex === index" name="solar:refresh-bold" class="w-4 h-4 animate-spin" />
+              <Icon v-else name="solar:play-bold" class="w-4 h-4" />
+            </div>
           </div>
         </div>
       </div>
@@ -67,12 +91,20 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { usePlayerStore } from '~/stores/player'
 
 const route = useRoute()
+const player = usePlayerStore()
+
 const artistId = route.params.id
 const artistName = route.query.name
 
+// Indikator loading per item lagu
+const loadingTrackIndex = ref(null)
+
+// 🌐 AMBIL DATA PROFIL DARI API SPOTIFY LOKAL
 const { data: artistInfo, pending, error } = await useAsyncData(
   `artist-${artistId}`,
   async () => {
@@ -97,4 +129,116 @@ const { data: artistInfo, pending, error } = await useAsyncData(
     }
   }
 )
+
+// 🚀 FUNGSI AUTOMATIC SEARCH VIDEO ID YOUTUBE SEBELUM MEMUTAR MUSIK
+const handlePlayTrack = async (spotifyTrack, index) => {
+  if (!spotifyTrack || !player.playTrack || loadingTrackIndex.value !== null) return
+
+  loadingTrackIndex.value = index
+
+  try {
+    // 1. Tembak pencarian ke backend YouTube Anda menggunakan data nama artis + judul lagu asli Spotify
+    const searchQuery = `${artistInfo.value?.name} ${spotifyTrack.title}`
+    const searchData = await $fetch('/api/tracks', {
+      query: { q: searchQuery }
+    })
+
+    // 2. Ambil item pertama dari hasil pencarian database YouTube Anda
+    const targetYoutubeTrack = searchData.items?.[0]
+
+    if (targetYoutubeTrack && targetYoutubeTrack.id?.videoId) {
+      // 3. Jika videoId asli dari YouTube ditemukan, kirim datanya langsung ke Pinia Store
+      player.playTrack(targetYoutubeTrack)
+    } else {
+      // Strategi Cadangan: Jika endpoint pencarian terisolasi gagal, buat struktur bungkusan paksa
+      const fallbackTrack = {
+        id: { videoId: spotifyTrack.videoId || '' },
+        snippet: {
+          title: spotifyTrack.title,
+          channelTitle: artistInfo.value?.name || 'Unknown Artist',
+          thumbnails: {
+            medium: { url: spotifyTrack.albumCover || artistInfo.value?.image },
+            high: { url: spotifyTrack.albumCover || artistInfo.value?.image }
+          }
+        }
+      }
+      player.playTrack(fallbackTrack)
+    }
+  } catch (err) {
+    console.error('Pencarian Otomatis Video Stream YouTube Gagal:', err)
+  } finally {
+    loadingTrackIndex.value = null
+  }
+}
+
+const convertSpotifyTracksToYoutube = async () => {
+  const results = []
+
+  for (const track of artistInfo.value.topTracks) {
+    try {
+      const searchQuery =
+        `${artistInfo.value.name} ${track.title}`
+
+      const searchData = await $fetch('/api/tracks', {
+        query: {
+          q: searchQuery
+        }
+      })
+
+      const ytTrack = searchData.items?.[0]
+
+      if (ytTrack) {
+        results.push(ytTrack)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  return results
+}
+
+const addAllToQueue = async () => {
+  const tracks = await convertSpotifyTracksToYoutube()
+
+  if (!tracks.length) return
+
+  tracks.forEach(track => {
+    player.addToQueue(track)
+  })
+
+  alert(`${tracks.length} lagu ditambahkan ke antrian`)
+}
+
+const playAllTracks = async () => {
+  const tracks = await convertSpotifyTracksToYoutube()
+
+  if (!tracks.length) return
+
+  player.setQueue(tracks)
+  player.playTrack(tracks[0])
+}
+
+const shuffleAllTracks = async () => {
+  const tracks = await convertSpotifyTracksToYoutube()
+
+  if (!tracks.length) return
+
+  const shuffled = [...tracks].sort(
+    () => Math.random() - 0.5
+  )
+
+  player.setQueue(shuffled)
+  player.playTrack(shuffled[0])
+}
 </script>
+
+<style scoped>
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+</style>

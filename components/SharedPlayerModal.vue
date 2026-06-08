@@ -7,10 +7,8 @@
     leave-from-class="transform translate-y-0 opacity-100"
     leave-to-class="transform translate-y-full opacity-0"
   >
-    <!-- Container Utama -->
     <div v-if="isOpen" class="fixed inset-0 z-50 bg-[#121212] flex flex-col md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[420px] md:h-[88vh] md:rounded-3xl md:border md:border-white/10 md:shadow-2xl overflow-hidden text-zinc-100">
       
-      <!-- Top Action Bar -->
       <div class="relative z-10 flex items-center justify-between px-5 py-4">
         <button @click="emit('close')" class="p-2 -ml-2 text-zinc-300 hover:text-white active:scale-95 transition-transform">
           <Icon name="solar:alt-arrow-down-bold" class="w-6 h-6" />
@@ -21,17 +19,13 @@
         </div>
       </div>
 
-      <!-- AREA KONTEN UTAMA DENGAN KONDISI DINAMIS TAB -->
       <div class="relative z-10 flex-1 flex flex-col px-6 justify-between overflow-hidden pb-4">
         
-        <!-- ================== TAB VIEW: DEFAULT (MUSIC PLAYER) ================== -->
         <div v-if="activeTab === 'player'" class="flex-1 flex flex-col justify-center space-y-6 overflow-y-auto scrollbar-hide py-4">
-          <!-- Big Cover Art -->
           <div class="w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-white/5 bg-zinc-900">
             <img :src="track?.snippet?.thumbnails?.high?.url || track?.snippet?.thumbnails?.medium?.url" class="w-full h-full object-cover" alt="Cover Art" />
           </div>
 
-          <!-- Info Detail Trek & Kontrol Suka -->
           <div class="flex items-center justify-between gap-4 pt-2">
             <div class="min-w-0 flex-1">
               <h2 class="text-2xl font-black text-white truncate tracking-tight">{{ track?.snippet?.title }}</h2>
@@ -41,12 +35,18 @@
             </div>
             <div class="flex items-center gap-3 flex-shrink-0">
               <button class="text-zinc-400 hover:text-white transition-colors"><Icon name="solar:playlist-2-bold" class="w-6 h-6" /></button>
-              <button class="text-zinc-400 hover:text-rose-500 transition-colors"><Icon name="solar:heart-linear" class="w-6 h-6" /></button>
+              
+              <button 
+                @click="player.toggleLike(track)" 
+                class="transition-all duration-300 active:scale-75"
+                :class="player.isLiked(track) ? 'text-rose-500 scale-105' : 'text-zinc-400 hover:text-white'"
+              >
+                <Icon :name="player.isLiked(track) ? 'solar:heart-bold' : 'solar:heart-linear'" class="w-6 h-6" />
+              </button>
             </div>
           </div>
         </div>
 
-        <!-- ================== TAB VIEW: LIVE SYNCED LYRICS FULLSCREEN ================== -->
         <div v-else-if="activeTab === 'lyrics'" class="flex-1 flex flex-col overflow-hidden py-4">
           <div class="mb-4 pb-2 border-b border-white/5 flex-shrink-0">
             <h4 class="text-white text-sm font-bold truncate tracking-tight">{{ track?.snippet?.title }}</h4>
@@ -81,18 +81,14 @@
           </div>
         </div>
 
-        <!-- ================== TAB VIEW: REAL-TIME SPOTIFY ARTIST INFO & TRACKS ================== -->
         <div v-else-if="activeTab === 'artist'" class="flex-1 flex flex-col space-y-5 overflow-y-auto scrollbar-hide py-4">
           
-          <!-- Loading State Artis -->
           <div v-if="loadingArtist" class="text-center my-auto py-12 text-zinc-500 text-sm animate-pulse flex items-center justify-center gap-2">
             <Icon name="solar:refresh-bold" class="animate-spin w-5 h-5 text-rose-500" />
             <span>Mencari profil di Spotify...</span>
           </div>
 
-          <!-- Tampilan Profil jika Data Artis Berhasil Ditemukan -->
           <template v-else-if="artistData">
-            <!-- Banner Artis Spotify -->
             <div class="relative w-full h-40 rounded-2xl overflow-hidden shadow-2xl bg-zinc-900 group border border-white/5 flex-shrink-0">
               <img 
                 :src="artistData.image" 
@@ -101,7 +97,6 @@
               />
               <div class="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/40 to-transparent"></div>
               
-              <!-- Tag Popularitas Spotify Mini -->
               <div class="absolute top-3 right-3 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/10 text-[10px] font-bold text-rose-400 flex items-center gap-1">
                 <Icon name="solar:star-bold" class="w-3 h-3" />
                 <span>Populer #{{ artistData.popularity }}</span>
@@ -112,7 +107,6 @@
               </div>
             </div>
 
-            <!-- BAGIAN DAFTAR LAGU POPULER -->
             <div class="space-y-3 flex-1">
               <div class="flex items-center justify-between border-b border-white/5 pb-2">
                 <h3 class="text-sm font-black uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
@@ -129,20 +123,16 @@
                   class="flex items-center justify-between p-2 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors group cursor-pointer border border-transparent hover:border-white/5"
                 >
                   <div class="flex items-center gap-3 min-w-0">
-                    <!-- Nomor / Indeks Lagu -->
                     <span class="text-xs font-bold text-zinc-500 w-4 text-center group-hover:text-rose-400 transition-colors">
                       {{ idx + 1 }}
                     </span>
-                    <!-- Cover Art Lagu Mini -->
                     <img :src="trackItem.albumCover" class="w-10 h-10 rounded-lg object-cover bg-zinc-800 border border-white/5 flex-shrink-0" alt="Cover" />
-                    <!-- Judul Lagu & Nama Artis -->
                     <div class="min-w-0">
                       <p class="text-sm font-bold text-white truncate group-hover:text-rose-400 transition-colors">{{ trackItem.title }}</p>
                       <p class="text-xs text-zinc-400 truncate mt-0.5">{{ artistData.name }}</p>
                     </div>
                   </div>
                   
-                  <!-- Tombol Putar Mini -->
                   <button class="p-2 rounded-full bg-zinc-800 text-zinc-400 opacity-60 group-hover:opacity-100 group-hover:bg-white group-hover:text-black transition-all">
                     <Icon name="solar:play-bold" class="w-3.5 h-3.5" />
                   </button>
@@ -155,18 +145,13 @@
             </p>
           </template>
 
-          <!-- Error / Fallback State -->
           <div v-else class="text-center my-auto py-12 text-zinc-500 text-xs space-y-2">
             <Icon name="solar:user-block-bold" class="w-8 h-8 text-zinc-600 mx-auto" />
             <p>Gagal memuat daftar lagu artis ini.</p>
           </div>
         </div>
 
-        <!-- ====================================================================== -->
-
-        <!-- DECK DEPAN: CONTROLS & TIMELINE -->
         <div class="w-full space-y-5 pt-2 bg-[#121212]/50 backdrop-blur-sm flex-shrink-0">
-          <!-- Timeline Slider Progress Bar -->
           <div class="space-y-2">
             <div class="h-1 w-full bg-white/10 rounded-full overflow-hidden group cursor-pointer relative" @click="handleSeek">
               <div class="h-full bg-white rounded-full transition-all duration-100 ease-linear relative" :style="{ width: `${progressPercentage}%` }">
@@ -179,18 +164,44 @@
             </div>
           </div>
 
-          <!-- Main Player Action Deck Buttons -->
           <div class="flex items-center justify-between px-2">
-            <button class="text-zinc-400 hover:text-white transition-colors"><Icon name="solar:shuffle-bold" class="w-5 h-5" /></button>
-            <button class="text-white hover:text-rose-400 transition-colors active:scale-90"><Icon name="solar:skip-previous-bold" class="w-7 h-7" /></button>
-            <button @click="player.togglePlay()" class="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-xl active:scale-95 transition-transform">
-              <Icon :name="player.isPlaying ? 'solar:pause-bold' : 'solar:play-bold'" class="w-7 h-7" :class="{'ml-0.5': !player.isPlaying}" />
-            </button>
-            <button class="text-white hover:text-rose-400 transition-colors active:scale-90"><Icon name="solar:skip-next-bold" class="w-7 h-7" /></button>
-            <button class="text-zinc-400 hover:text-white transition-colors"><Icon name="solar:repeat-bold" class="w-5 h-5" /></button>
-          </div>
+  <button
+    @click="player.toggleShuffle()"
+    class="transition-colors transition-transform active:scale-95"
+    :class="player.isShuffle ? 'text-rose-500' : 'text-zinc-400'"
+  >
+    <Icon name="solar:shuffle-bold" class="w-5 h-5" />
+  </button>
 
-          <!-- BOTTOM TAB MENU NAVIGASI -->
+  <button class="text-white">
+    <Icon name="solar:skip-previous-bold" class="w-7 h-7" />
+  </button>
+
+  <button @click="player.togglePlay()">
+    <Icon
+      :name="player.isPlaying ? 'solar:pause-bold' : 'solar:play-bold'"
+      class="w-7 h-7"
+    />
+  </button>
+
+  <button class="text-white">
+    <Icon name="solar:skip-next-bold" class="w-7 h-7" />
+  </button>
+
+  <button
+    @click="player.toggleRepeat()"
+    class="transition-colors active:scale-95"
+    :class="
+      player.isRepeat
+        ? 'text-rose-500'
+        : 'text-zinc-400 hover:text-white'
+    "
+  >
+    <Icon name="solar:repeat-bold" class="w-5 h-5" />
+  </button>
+</div>
+
+
           <div class="grid grid-cols-3 bg-[#18181c] border border-white/5 rounded-2xl p-1.5 mt-2 shadow-inner">
             <button @click="activeTab = 'player'" class="flex flex-col items-center justify-center py-2 rounded-xl transition-all gap-1" :class="activeTab === 'player' ? 'text-white bg-white/5 font-bold' : 'text-zinc-500 text-xs'">
               <Icon name="solar:playlist-minimalistic-bold-duotone" class="w-5 h-5" :class="activeTab === 'player' ? 'text-rose-500' : ''" />
@@ -200,7 +211,6 @@
               <Icon name="solar:music-note-bold-duotone" class="w-5 h-5" :class="activeTab === 'lyrics' ? 'text-rose-500' : ''" />
               <span class="text-[9px] uppercase tracking-wider">Lyrics</span>
             </button>
-            <!-- SESUDAHNYA -->
             <button @click="handleRedirectToArtistPage" class="flex flex-col items-center justify-center py-2 rounded-xl transition-all gap-1 text-zinc-500 text-xs hover:text-white">
               <Icon name="solar:user-circle-bold-duotone" class="w-5 h-5" />
               <span class="text-[9px] uppercase tracking-wider">Lihat Artis</span>
@@ -396,6 +406,25 @@ watch(activeLyricIndex, async (newIndex) => {
 
 const goToArtist = () => {
   activeTab.value = 'artist' 
+}
+
+const playerStore = usePlayerStore()
+
+// Fungsi pembaca perubahan status pemutaran video YouTube
+const onPlayerStateChange = (event) => {
+
+  if (event.data === 0) {
+  if (playerStore.isRepeat) {
+    playerStore.playTrack(playerStore.currentTrack)
+  } else {
+    playerStore.playNextTrack()
+  }
+}
+  
+
+  // Logika pembaca status play/pause kamu yang sudah ada sebelumnya
+  if (event.data === 1) playerStore.isPlaying = true
+  if (event.data === 2) playerStore.isPlaying = false
 }
 </script>
 
