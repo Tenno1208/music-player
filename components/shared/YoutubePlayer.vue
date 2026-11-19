@@ -40,8 +40,9 @@ onMounted(async () => {
     },
     events: {
       onReady: (event) => {
-        if (playerStore.currentTrack) {
-          ytPlayer.loadVideoById(playerStore.currentTrack.id.videoId)
+        const vId = playerStore.currentTrack?.id?.videoId || playerStore.currentTrack?.youtubeId
+        if (vId && ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+          ytPlayer.loadVideoById(vId)
         }
       },
       onStateChange: (event) => {
@@ -89,8 +90,9 @@ const stopProgressInterval = () => {
 
 // Watchers to control the player from store state
 watch(() => playerStore.currentTrack, (newTrack) => {
-  if (ytPlayer && typeof ytPlayer.loadVideoById === 'function' && newTrack) {
-    ytPlayer.loadVideoById(newTrack.id.videoId)
+  const vId = newTrack?.id?.videoId || newTrack?.youtubeId
+  if (ytPlayer && typeof ytPlayer.loadVideoById === 'function' && vId) {
+    ytPlayer.loadVideoById(vId)
   }
 })
 

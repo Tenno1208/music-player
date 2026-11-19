@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 /**
  * Player store — engine: YouTube IFrame Player API (lagu penuh, gratis, tanpa API key).
@@ -25,6 +25,7 @@ export const usePlayerStore = defineStore('player', () => {
   const muted = ref(false)
   const shuffle = ref(false)
   const repeat = ref('off') // 'off' | 'all' | 'one'
+  const isModalOpen = ref(false)
 
   /* ===== lagu favorit (persist ke localStorage) ===== */
   const LIKED_KEY = 'music-player-liked'
@@ -53,16 +54,18 @@ export const usePlayerStore = defineStore('player', () => {
   const ensureYt = () => {
     if (!import.meta.client) return
     if (window.YT && window.YT.Player) { ytReady = true; ensureYtPlayer(); return }
+    const prevReady = window.onYouTubeIframeAPIReady
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof prevReady === 'function') prevReady()
+      ytReady = true
+      ensureYtPlayer()
+    }
     if (!document.getElementById('yt-iframe-api')) {
       const tag = document.createElement('script')
       tag.id = 'yt-iframe-api'
       tag.src = 'https://www.youtube.com/iframe_api'
       tag.async = true
       document.head.appendChild(tag)
-    }
-    // YouTube IFrame API akan memanggil window.onYouTubeIframeAPIReady() saat siap.
-    if (typeof window.onYouTubeIframeAPIReady !== 'function') {
-      window.onYouTubeIframeAPIReady = () => { ytReady = true; ensureYtPlayer() }
     }
   }
 
@@ -154,6 +157,12 @@ export const usePlayerStore = defineStore('player', () => {
     if (!track) return null
     if (track.youtubeId) return track.youtubeId
 
+    // kalau objek membawa id.videoId (format YouTube API)
+    if (track.id?.videoId) {
+      track.youtubeId = track.id.videoId
+      return track.id.videoId
+    }
+
     // kalau previewUrl ternyata URL YouTube, ambil id-nya langsung
     if (typeof track.previewUrl === 'string' && /youtube\.com|youtu\.be/.test(track.previewUrl)) {
       const m = track.previewUrl.match(/(?:v=|youtu\.be\/)([\w-]{11})/)
@@ -162,7 +171,9 @@ export const usePlayerStore = defineStore('player', () => {
 
     if (!import.meta.client) return null
     try {
-      const q = `${track.artist || ''} ${track.title || ''}`.trim()
+      const title = track.title || track.snippet?.title || ''
+      const artist = track.artist || track.snippet?.channelTitle || ''
+      const q = `${artist} ${title}`.trim()
       if (!q) return null
       const res = await $fetch('/api/youtube-search', { query: { q } })
       if (res?.videoId) { track.youtubeId = res.videoId; return res.videoId } // cache ke track biar nggak search ulang
@@ -360,17 +371,26 @@ export const usePlayerStore = defineStore('player', () => {
   }
   const isLiked = (track) => !!track && likedTracks.value.some((t) => t.id === track.id)
 
-  // alias agar komponen lama yang membaca player.current tetap aman
+  const addToQueue = (track) => {
+    if (track) queue.value.push(track)
+  }
+
+  // alias kompatibilitas komponen
   const current = currentTrack
+  const isShuffle = computed(() => shuffle.value)
+  const isRepeat = computed(() => repeat.value !== 'off')
+  const playNextTrack = next
+  const seekTo = seek
+  const toggleRepeat = cycleRepeat
 
   return {
     queue, currentIndex, currentTrack, current,
     isPlaying, currentTime, duration,
-    volume, muted, shuffle, repeat,
-    likedTracks,
-    setQueue, playTrack, pause, togglePlay, stop,
-    next, previous, seek,
-    setVolume, toggleMute, toggleShuffle, cycleRepeat,
+    volume, muted, shuffle, repeat, isShuffle, isRepeat,
+    isModalOpen, likedTracks,
+    setQueue, addToQueue, playTrack, pause, togglePlay, stop,
+    next, previous, playNextTrack, seek, seekTo,
+    setVolume, toggleMute, toggleShuffle, cycleRepeat, toggleRepeat,
     toggleLike, isLiked
   }
 })

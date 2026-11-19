@@ -1,8 +1,19 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { usePlayerStore } from '~/stores/player'
 
 const player = usePlayerStore()
+
+const trackTitle = computed(() => player.currentTrack?.title || player.currentTrack?.snippet?.title || 'Memutar Lagu')
+const trackArtist = computed(() => player.currentTrack?.artist || player.currentTrack?.snippet?.channelTitle || 'Artis Tidak Diketahui')
+const trackCover = computed(() =>
+  player.currentTrack?.albumCover ||
+  player.currentTrack?.artistImage ||
+  player.currentTrack?.snippet?.thumbnails?.medium?.url ||
+  player.currentTrack?.snippet?.thumbnails?.high?.url ||
+  player.currentTrack?.snippet?.thumbnails?.default?.url ||
+  ''
+)
 
 const formatTime = (seconds) => {
   if (!seconds || isNaN(seconds)) return '0:00'
@@ -20,15 +31,14 @@ const handleSeek = (event) => {
   const rect = event.currentTarget.getBoundingClientRect()
   const clickX = event.clientX - rect.left
   const percentage = Math.max(0, Math.min(1, clickX / rect.width))
-  player.seekTo(percentage * player.duration)
+  player.seek(percentage * player.duration)
 }
 
-// Volume control state (defaults to 100%)
-const volume = ref(80)
-const isMuted = ref(false)
-
-const toggleMute = () => {
-  isMuted.value = !isMuted.value
+const handleVolumeClick = (event) => {
+  const rect = event.currentTarget.getBoundingClientRect()
+  const clickX = event.clientX - rect.left
+  const v = Math.max(0, Math.min(1, clickX / rect.width))
+  player.setVolume(v)
 }
 </script>
 
@@ -51,17 +61,21 @@ const toggleMute = () => {
       <div class="flex items-center gap-3 min-w-0 flex-1 pr-2">
         <div class="relative w-10 h-10 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0 border border-white/10">
           <img
-            :src="player.currentTrack.snippet?.thumbnails?.medium?.url || player.currentTrack.snippet?.thumbnails?.default?.url"
+            v-if="trackCover"
+            :src="trackCover"
             class="w-full h-full object-cover"
             alt="Album Cover"
           />
+          <div v-else class="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-500">
+            <Icon name="solar:music-note-bold" class="w-5 h-5" />
+          </div>
         </div>
         <div class="min-w-0 flex-1">
           <p class="text-xs font-semibold text-white truncate">
-            {{ player.currentTrack.snippet?.title }}
+            {{ trackTitle }}
           </p>
           <p class="text-[11px] text-zinc-400 truncate mt-0.5">
-            {{ player.currentTrack.snippet?.channelTitle }}
+            {{ trackArtist }}
           </p>
         </div>
       </div>
@@ -105,10 +119,14 @@ const toggleMute = () => {
           @click="player.isModalOpen = true"
         >
           <img
-            :src="player.currentTrack.snippet?.thumbnails?.medium?.url || player.currentTrack.snippet?.thumbnails?.default?.url"
+            v-if="trackCover"
+            :src="trackCover"
             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             alt="Track Cover"
           />
+          <div v-else class="w-full h-full flex items-center justify-center bg-zinc-900 text-zinc-500">
+            <Icon name="solar:music-note-bold" class="w-6 h-6" />
+          </div>
           <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
             <Icon name="solar:maximize-square-linear" class="w-4 h-4 text-white" />
           </div>
@@ -120,7 +138,7 @@ const toggleMute = () => {
               class="text-xs font-semibold text-zinc-100 truncate cursor-pointer hover:underline"
               @click="player.isModalOpen = true"
             >
-              {{ player.currentTrack.snippet?.title }}
+              {{ trackTitle }}
             </h4>
             <!-- Equalizer Animation when playing -->
             <div v-if="player.isPlaying" class="flex items-end gap-0.5 h-3 flex-shrink-0" title="Memutar">
@@ -130,7 +148,7 @@ const toggleMute = () => {
             </div>
           </div>
           <p class="text-[11px] text-zinc-400 truncate mt-0.5">
-            {{ player.currentTrack.snippet?.channelTitle }}
+            {{ trackArtist }}
           </p>
         </div>
 
@@ -154,14 +172,15 @@ const toggleMute = () => {
           <button
             @click="player.toggleShuffle()"
             class="relative transition-colors"
-            :class="player.isShuffle ? 'text-rose-400' : 'text-zinc-500 hover:text-zinc-200'"
+            :class="player.shuffle ? 'text-rose-400' : 'text-zinc-500 hover:text-zinc-200'"
             title="Acak Lagu"
           >
             <Icon name="solar:shuffle-linear" class="w-4 h-4" />
-            <span v-if="player.isShuffle" class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-rose-500"></span>
+            <span v-if="player.shuffle" class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-rose-500"></span>
           </button>
 
           <button
+            @click="player.previous()"
             class="text-zinc-400 hover:text-white transition-colors active:scale-95"
             title="Lagu Sebelumnya"
           >
@@ -181,7 +200,7 @@ const toggleMute = () => {
           </button>
 
           <button
-            @click="player.playNextTrack()"
+            @click="player.next()"
             class="text-zinc-400 hover:text-white transition-colors active:scale-95"
             title="Lagu Selanjutnya"
           >
@@ -189,13 +208,13 @@ const toggleMute = () => {
           </button>
 
           <button
-            @click="player.toggleRepeat()"
+            @click="player.cycleRepeat()"
             class="relative transition-colors"
-            :class="player.isRepeat ? 'text-rose-400' : 'text-zinc-500 hover:text-zinc-200'"
+            :class="player.repeat !== 'off' ? 'text-rose-400' : 'text-zinc-500 hover:text-zinc-200'"
             title="Ulangi Lagu"
           >
             <Icon name="solar:repeat-linear" class="w-4 h-4" />
-            <span v-if="player.isRepeat" class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-rose-500"></span>
+            <span v-if="player.repeat !== 'off'" class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-rose-500"></span>
           </button>
         </div>
 
@@ -234,11 +253,11 @@ const toggleMute = () => {
 
         <!-- Volume -->
         <div class="flex items-center gap-2">
-          <button @click="toggleMute" class="text-zinc-400 hover:text-white transition-colors">
-            <Icon :name="isMuted ? 'solar:volume-cross-linear' : 'solar:volume-loud-linear'" class="w-4 h-4" />
+          <button @click="player.toggleMute()" class="text-zinc-400 hover:text-white transition-colors">
+            <Icon :name="player.muted ? 'solar:volume-cross-linear' : 'solar:volume-loud-linear'" class="w-4 h-4" />
           </button>
-          <div class="w-16 h-1 bg-white/10 rounded-full overflow-hidden cursor-pointer group">
-            <div class="h-full bg-zinc-300 group-hover:bg-rose-500 transition-colors" :style="{ width: isMuted ? '0%' : '75%' }"></div>
+          <div class="w-16 h-1 bg-white/10 rounded-full overflow-hidden cursor-pointer group" @click="handleVolumeClick">
+            <div class="h-full bg-zinc-300 group-hover:bg-rose-500 transition-colors" :style="{ width: player.muted ? '0%' : `${player.volume * 100}%` }"></div>
           </div>
         </div>
 

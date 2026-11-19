@@ -12,7 +12,7 @@
     <div class="space-y-1">
       <div
         v-for="(track, index) in tracks"
-        :key="track.id?.videoId || index"
+        :key="track.id?.videoId || track.id || index"
         @click="playSong(track)"
         class="grid grid-cols-12 items-center px-3 sm:px-4 py-2.5 rounded-xl hover:bg-white/[0.04] transition-colors cursor-pointer group border border-transparent hover:border-white/[0.04]"
         :class="{ 'bg-white/[0.06] border-white/[0.08]': isCurrentTrack(track) }"
@@ -44,7 +44,7 @@
         <div class="col-span-8 sm:col-span-5 md:col-span-6 flex items-center gap-3 min-w-0 pr-2">
           <div class="relative w-10 h-10 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0 border border-white/10 shadow-sm">
             <img
-              :src="track.snippet?.thumbnails?.default?.url || track.snippet?.thumbnails?.medium?.url"
+              :src="track.albumCover || track.artistImage || track.snippet?.thumbnails?.default?.url || track.snippet?.thumbnails?.medium?.url"
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               alt="Track Art"
               loading="lazy"
@@ -55,17 +55,17 @@
               class="text-xs sm:text-sm font-semibold truncate transition-colors"
               :class="isCurrentTrack(track) ? 'text-rose-400' : 'text-zinc-200 group-hover:text-white'"
             >
-              {{ track.snippet?.title }}
+              {{ track.title || track.snippet?.title }}
             </span>
             <span class="text-[11px] text-zinc-500 truncate mt-0.5 hover:text-zinc-300 font-medium">
-              {{ track.snippet?.channelTitle }}
+              {{ track.artist || track.snippet?.channelTitle }}
             </span>
           </div>
         </div>
 
         <!-- Col 3: Channel / Meta (Desktop) -->
         <div class="hidden sm:block sm:col-span-4 md:col-span-4 text-xs text-zinc-400 truncate pr-4 font-normal">
-          {{ track.snippet?.channelTitle }}
+          {{ track.artist || track.album || track.snippet?.channelTitle }}
         </div>
 
         <!-- Col 4: Like & Duration -->
@@ -82,7 +82,7 @@
             />
           </button>
           <span class="text-xs font-mono text-zinc-500">
-            {{ isCurrentTrack(track) && player.duration ? formatTime(player.duration) : '3:45' }}
+            {{ track.durationMs ? formatTime(track.durationMs / 1000) : (isCurrentTrack(track) && player.duration ? formatTime(player.duration) : '3:45') }}
           </span>
         </div>
 
@@ -104,7 +104,11 @@ const props = defineProps({
 const player = usePlayerStore()
 
 const isCurrentTrack = (track) => {
-  return player.currentTrack?.id?.videoId === track.id?.videoId
+  const cur = player.currentTrack
+  if (!cur || !track) return false
+  const curId = cur.id?.videoId || cur.youtubeId || cur.id
+  const trackId = track.id?.videoId || track.youtubeId || track.id
+  return Boolean(curId && trackId && curId === trackId)
 }
 
 const formatTime = (seconds) => {

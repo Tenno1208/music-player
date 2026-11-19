@@ -24,10 +24,6 @@
       :track="player.currentTrack" 
       @close="player.isModalOpen = false" 
     />
-
-    <!-- Invisible Background Streaming Engine -->
-    <SharedYoutubePlayer />
-
   </div>
 </template>
 

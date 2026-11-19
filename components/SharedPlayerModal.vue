@@ -77,22 +77,26 @@
             <!-- Large Artwork -->
             <div class="w-full aspect-square max-w-[320px] mx-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-zinc-900 group">
               <img
-                :src="track?.snippet?.thumbnails?.high?.url || track?.snippet?.thumbnails?.medium?.url"
+                v-if="trackCover"
+                :src="trackCover"
                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 alt="Cover Art"
               />
+              <div v-else class="w-full h-full flex items-center justify-center bg-zinc-900 text-zinc-600">
+                <Icon name="solar:music-note-bold" class="w-16 h-16" />
+              </div>
             </div>
 
             <!-- Track Info -->
             <div class="text-left space-y-1">
               <h2 class="text-xl md:text-2xl font-bold text-white tracking-tight line-clamp-2">
-                {{ track?.snippet?.title }}
+                {{ trackTitle }}
               </h2>
               <p
                 class="text-sm font-medium text-rose-400 hover:underline cursor-pointer inline-block"
                 @click="activeTab = 'artist'"
               >
-                {{ track?.snippet?.channelTitle }}
+                {{ trackArtist }}
               </p>
             </div>
           </div>
@@ -102,8 +106,8 @@
             <!-- Lyrics Header -->
             <div class="flex items-center justify-between pb-3 border-b border-white/[0.06] flex-shrink-0">
               <div class="min-w-0">
-                <p class="text-xs font-semibold text-white truncate">{{ track?.snippet?.title }}</p>
-                <p class="text-[11px] text-zinc-500 truncate">{{ track?.snippet?.channelTitle }}</p>
+                <p class="text-xs font-semibold text-white truncate">{{ trackTitle }}</p>
+                <p class="text-[11px] text-zinc-500 truncate">{{ trackArtist }}</p>
               </div>
               <span class="text-[10px] font-medium text-zinc-500 uppercase tracking-wider bg-white/[0.04] px-2 py-0.5 rounded-full border border-white/[0.06]">
                 Sync Lirik
@@ -233,13 +237,17 @@
             <button
               @click="player.toggleShuffle()"
               class="transition-colors active:scale-95"
-              :class="player.isShuffle ? 'text-rose-400' : 'text-zinc-500 hover:text-zinc-300'"
+              :class="player.shuffle ? 'text-rose-400' : 'text-zinc-500 hover:text-zinc-300'"
               title="Acak"
             >
               <Icon name="solar:shuffle-linear" class="w-5 h-5" />
             </button>
 
-            <button class="text-zinc-300 hover:text-white transition-colors active:scale-90" title="Sebelumnya">
+            <button
+              @click="player.previous()"
+              class="text-zinc-300 hover:text-white transition-colors active:scale-90"
+              title="Sebelumnya"
+            >
               <Icon name="solar:skip-previous-bold" class="w-6 h-6" />
             </button>
 
@@ -256,7 +264,7 @@
             </button>
 
             <button
-              @click="player.playNextTrack()"
+              @click="player.next()"
               class="text-zinc-300 hover:text-white transition-colors active:scale-90"
               title="Selanjutnya"
             >
@@ -264,9 +272,9 @@
             </button>
 
             <button
-              @click="player.toggleRepeat()"
+              @click="player.cycleRepeat()"
               class="transition-colors active:scale-95"
-              :class="player.isRepeat ? 'text-rose-400' : 'text-zinc-500 hover:text-zinc-300'"
+              :class="player.repeat !== 'off' ? 'text-rose-400' : 'text-zinc-500 hover:text-zinc-300'"
               title="Ulangi"
             >
               <Icon name="solar:repeat-linear" class="w-5 h-5" />
@@ -290,6 +298,17 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 const player = usePlayerStore()
+
+const trackTitle = computed(() => props.track?.title || props.track?.snippet?.title || 'Memutar Lagu')
+const trackArtist = computed(() => props.track?.artist || props.track?.snippet?.channelTitle || 'Artis Tidak Diketahui')
+const trackCover = computed(() =>
+  props.track?.albumCover ||
+  props.track?.artistImage ||
+  props.track?.snippet?.thumbnails?.high?.url ||
+  props.track?.snippet?.thumbnails?.medium?.url ||
+  props.track?.snippet?.thumbnails?.default?.url ||
+  ''
+)
 
 const activeTab = ref('player') // 'player' | 'lyrics' | 'artist'
 const lyricsContainer = ref(null)
@@ -317,7 +336,7 @@ const handleSeek = (event) => {
   const rect = event.currentTarget.getBoundingClientRect()
   const clickX = event.clientX - rect.left
   const percentage = Math.max(0, Math.min(1, clickX / rect.width))
-  player.seekTo(percentage * player.duration)
+  player.seek(percentage * player.duration)
 }
 
 // Fetch artist info from Spotify API endpoint
@@ -328,8 +347,12 @@ const fetchSpotifyArtist = async () => {
   artistData.value = null
 
   try {
-    const rawArtistName = props.track.snippet?.channelTitle || ''
+    const rawArtistName = trackArtist.value || ''
     const cleanArtistName = rawArtistName
+      .replace(/video|official|topic|vevo|records|music/gi, '')
+      .trim()
+
+    if (!cleanArtistName) throw new Error('Artis tidak diketahui')
       .replace(/video|official|topic|vevo|records|music/gi, '')
       .trim()
 
@@ -406,12 +429,17 @@ const fetchLyrics = async () => {
   lyrics.value = []
 
   try {
-    const rawTitle = props.track.snippet?.title || ''
+    const rawTitle = trackTitle.value || ''
     const cleanTitle = rawTitle.replace(/\[[^\]]*\]|\([^)]*\)|official\s*video|lyric\s*video|lyrics|video/gi, '').trim()
-    const artist = props.track.snippet?.channelTitle || ''
+    const artist = trackArtist.value || ''
+
+    if (!cleanTitle && !rawTitle) {
+      noLyricsFound.value = true
+      return
+    }
 
     const data = await $fetch('/api/lyrics', {
-      query: { track_name: cleanTitle, artist_name: artist }
+      query: { track_name: cleanTitle || rawTitle, artist_name: artist }
     })
 
     if (data && data.syncedLyrics) {
@@ -451,9 +479,16 @@ watch(activeLyricIndex, async (newIndex) => {
   }
 })
 
-// Watch track changes
-watch(() => props.track?.id?.videoId, () => {
-  fetchLyrics()
-  fetchSpotifyArtist()
+// Watch track changes (mendukung format YouTube { id: { videoId } } maupun Deezer/flat { id })
+const trackIdentifier = computed(() => {
+  if (!props.track) return null
+  return props.track.id?.videoId || props.track.youtubeId || props.track.id || props.track.title
+})
+
+watch(trackIdentifier, (newVal) => {
+  if (newVal) {
+    fetchLyrics()
+    fetchSpotifyArtist()
+  }
 }, { immediate: true })
 </script>
