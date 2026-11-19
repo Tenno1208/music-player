@@ -1,152 +1,232 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { usePlayerStore } from '~/stores/player'
 
+const route = useRoute()
+const router = useRouter()
 const player = usePlayerStore()
 
-// State untuk mengatur tab kategori perpustakaan yang aktif
-const activeLibTab = ref('history')
+const activeTab = ref('liked') // 'liked' | 'history' | 'artists'
 
-// Ambil daftar lagu yang disukai dari store player kamu
-// (Memastikan store kamu memiliki properti 'likedTracks' atau 'favorites')
+// Sync with route query ?tab=
+watch(
+  () => route.query.tab,
+  (newTab) => {
+    if (newTab && ['liked', 'history', 'artists'].includes(newTab)) {
+      activeTab.value = newTab
+    }
+  },
+  { immediate: true }
+)
+
+const setTab = (tab) => {
+  activeTab.value = tab
+  router.replace({ query: { ...route.query, tab } })
+}
+
 const likedTracks = computed(() => {
-  return player.likedTracks || player.favorites || []
+  return player.likedTracks || []
 })
 
-// Simulasi data artis yang diikuti agar halaman tidak kosong saat menu artis dibuka
+const historyTracks = computed(() => {
+  return player.history || []
+})
+
 const followedArtists = ref([
-  { name: 'Mahalini', image: 'https://i.scdn.co/image/ab6761610000e5ebd3564043a332daaa882853d6', type: 'Artis Terverifikasi' },
-  { name: 'Hindia', image: 'https://i.scdn.co/image/ab6761610000e5ebb786cb6de7505caff17fe11f', type: 'Artis Terverifikasi' },
-  { name: 'Rex Orange County', image: 'https://i.scdn.co/image/ab6761610000e5eb901ccc452604c427ef5f202f', type: 'Artis Terverifikasi' }
+  {
+    id: '1dfeR4HaWDbWqFHLkxsg1d',
+    name: 'Mahalini',
+    image: 'https://i.scdn.co/image/ab6761610000e5ebd3564043a332daaa882853d6',
+    type: 'Artis Terverifikasi'
+  },
+  {
+    id: '4F4pp8NUW08BsX2VZODkAc',
+    name: 'Hindia',
+    image: 'https://i.scdn.co/image/ab6761610000e5ebb786cb6de7505caff17fe11f',
+    type: 'Artis Terverifikasi'
+  },
+  {
+    id: '77tT1b06qScNY8V5umUVUr',
+    name: 'Rex Orange County',
+    image: 'https://i.scdn.co/image/ab6761610000e5eb901ccc452604c427ef5f202f',
+    type: 'Artis Terverifikasi'
+  }
 ])
+
+const playAllLiked = () => {
+  if (likedTracks.value.length > 0) {
+    player.setQueue(likedTracks.value)
+    player.playTrack(likedTracks.value[0])
+  }
+}
+
+const playAllHistory = () => {
+  if (historyTracks.value.length > 0) {
+    player.setQueue(historyTracks.value)
+    player.playTrack(historyTracks.value[0])
+  }
+}
 </script>
 
 <template>
-  <!-- Padding bawah pb-24 ditambahkan agar tidak tertutup oleh Floating Navbar Mobile -->
-  <div class="px-4 sm:px-6 py-6 pb-24 max-w-5xl mx-auto text-zinc-100 selection:bg-rose-600 selection:text-white">
+  <div class="px-4 sm:px-8 py-6 max-w-7xl mx-auto space-y-8 select-none">
     
-    <!-- Header Utama Perpustakaan -->
-    <div class="flex items-center gap-4 mb-6">
-      <div class="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-gradient-to-br from-rose-500 to-red-700 flex items-center justify-center shadow-lg shadow-red-900/20">
-        <Icon name="solar:library-bold" class="w-6 h-6 text-white" />
+    <!-- Library Page Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-6">
+      <div class="flex items-center gap-4">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-500/20 to-zinc-900 border border-rose-500/30 flex items-center justify-center flex-shrink-0 shadow-lg">
+          <Icon name="solar:library-bold" class="w-7 h-7 text-rose-500" />
+        </div>
+        <div>
+          <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Koleksi Saya</h1>
+          <p class="text-xs sm:text-sm text-zinc-400 font-medium mt-0.5">
+            Arsip pribadi musik favorit dan riwayat dengar Anda
+          </p>
+        </div>
       </div>
-      <div>
-        <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">Koleksi Kamu</h1>
-        <p class="text-xs sm:text-sm text-zinc-400 font-medium">Perpustakaan musik pribadi Anda</p>
+
+      <!-- Quick Action: Play Liked -->
+      <div v-if="activeTab === 'liked' && likedTracks.length > 0">
+        <button
+          @click="playAllLiked"
+          class="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-transform active:scale-95 shadow-lg"
+        >
+          <Icon name="solar:play-bold" class="w-4 h-4 ml-0.5" />
+          <span>Putar Semua Lagu</span>
+        </button>
+      </div>
+      <div v-else-if="activeTab === 'history' && historyTracks.length > 0">
+        <button
+          @click="playAllHistory"
+          class="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-transform active:scale-95 shadow-lg"
+        >
+          <Icon name="solar:play-bold" class="w-4 h-4 ml-0.5" />
+          <span>Putar Ulang Riwayat</span>
+        </button>
       </div>
     </div>
 
-    <!-- ================== PILIHAN MENU KATEGORI PREMIUM ================== -->
-    <div class="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-3 mb-6 border-b border-white/5">
-      <!-- Menu 1: Riwayat Putar -->
-      <button 
-        @click="activeLibTab = 'history'"
-        class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all flex items-center gap-2 flex-shrink-0"
-        :class="activeLibTab === 'history' 
-          ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' 
-          : 'bg-white/5 border-transparent text-zinc-400 hover:text-white hover:bg-white/10'"
-      >
-        <Icon name="solar:history-bold" class="w-4 h-4" />
-        Riwayat Putar
-      </button>
-
-      <!-- Menu 2: Lagu Disukai (Liked Songs) -->
-      <button 
-        @click="activeLibTab = 'liked'"
-        class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all flex items-center gap-2 flex-shrink-0"
-        :class="activeLibTab === 'liked' 
-          ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' 
-          : 'bg-white/5 border-transparent text-zinc-400 hover:text-white hover:bg-white/10'"
+    <!-- Segmented Navigation Filter Tabs -->
+    <div class="flex items-center gap-2 border-b border-white/[0.06] pb-3">
+      <!-- Liked Tab -->
+      <button
+        @click="setTab('liked')"
+        class="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 border"
+        :class="activeTab === 'liked'
+          ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 shadow-sm'
+          : 'bg-white/[0.03] text-zinc-400 hover:text-white border-transparent hover:bg-white/[0.06]'"
       >
         <Icon name="solar:heart-bold" class="w-4 h-4" />
-        Lagu Disukai
-        <span v-if="likedTracks.length" class="ml-0.5 px-1.5 py-0.5 rounded-md bg-rose-500 text-white text-[9px] font-black">
+        <span>Lagu Disukai</span>
+        <span
+          v-if="likedTracks.length > 0"
+          class="px-1.5 py-0.5 rounded-md text-[10px] font-bold"
+          :class="activeTab === 'liked' ? 'bg-rose-500 text-white' : 'bg-white/10 text-zinc-300'"
+        >
           {{ likedTracks.length }}
         </span>
       </button>
 
-      <!-- Menu 3: Artis Diikuti -->
-      <button 
-        @click="activeLibTab = 'artists'"
-        class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all flex items-center gap-2 flex-shrink-0"
-        :class="activeLibTab === 'artists' 
-          ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' 
-          : 'bg-white/5 border-transparent text-zinc-400 hover:text-white hover:bg-white/10'"
+      <!-- History Tab -->
+      <button
+        @click="setTab('history')"
+        class="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 border"
+        :class="activeTab === 'history'
+          ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 shadow-sm'
+          : 'bg-white/[0.03] text-zinc-400 hover:text-white border-transparent hover:bg-white/[0.06]'"
+      >
+        <Icon name="solar:history-bold" class="w-4 h-4" />
+        <span>Riwayat Putar</span>
+        <span
+          v-if="historyTracks.length > 0"
+          class="px-1.5 py-0.5 rounded-md text-[10px] font-bold"
+          :class="activeTab === 'history' ? 'bg-rose-500 text-white' : 'bg-white/10 text-zinc-300'"
+        >
+          {{ historyTracks.length }}
+        </span>
+      </button>
+
+      <!-- Artists Tab -->
+      <button
+        @click="setTab('artists')"
+        class="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 border"
+        :class="activeTab === 'artists'
+          ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 shadow-sm'
+          : 'bg-white/[0.03] text-zinc-400 hover:text-white border-transparent hover:bg-white/[0.06]'"
       >
         <Icon name="solar:users-group-rounded-bold" class="w-4 h-4" />
-        Artis
+        <span>Artis Diikuti</span>
       </button>
     </div>
 
-    <!-- ================== KONTEN KONDISIONAL BERDASARKAN TAB ACTIVE ================== -->
-    
-    <!-- 1. VIEW KATEGORI: RIWAYAT PUTAR (HISTORY) -->
-    <div v-if="activeLibTab === 'history'">
-      <div v-if="player.history.length === 0" class="text-center py-16 bg-white/[0.01] rounded-2xl border border-white/5 p-6">
-        <Icon name="solar:music-notes-linear" class="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-        <h3 class="text-base font-bold text-zinc-300 mb-1">Belum ada riwayat musik</h3>
-        <p class="text-zinc-500 text-xs max-w-xs mx-auto mb-5">Lagu yang Anda putar di platform Noizy akan otomatis terekam rapi di sini.</p>
-        <NuxtLink to="/search" class="px-5 py-2.5 bg-white text-black text-xs font-black rounded-full hover:scale-105 transition-transform inline-block uppercase tracking-wider">
-          Cari Musik
+    <!-- ================= TAB 1: LIKED SONGS ================= -->
+    <div v-if="activeTab === 'liked'">
+      <div v-if="likedTracks.length === 0" class="py-16 text-center space-y-3 bg-white/[0.01] rounded-3xl border border-white/[0.05] p-8">
+        <div class="w-12 h-12 rounded-full bg-white/[0.04] flex items-center justify-center mx-auto text-zinc-500">
+          <Icon name="solar:heart-linear" class="w-6 h-6" />
+        </div>
+        <h3 class="text-base font-bold text-white">Belum Ada Lagu Favorit</h3>
+        <p class="text-xs text-zinc-500 max-w-sm mx-auto leading-relaxed">
+          Sentuh ikon hati pada lagu manapun yang Anda nikmati untuk menyimpannya di koleksi pribadi ini.
+        </p>
+        <NuxtLink
+          to="/search"
+          class="inline-block mt-2 px-5 py-2 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-white border border-white/[0.08]"
+        >
+          Temukan Musik Baru
         </NuxtLink>
       </div>
 
-      <div v-else class="space-y-1">
-        <div class="text-zinc-500 text-[10px] font-black uppercase tracking-wider mb-2 px-2">Terakhir Anda Putar</div>
-        <SharedTrackList :tracks="player.history" />
-      </div>
-    </div>
-
-    <!-- 2. VIEW KATEGORI: LAGU DISUKAI (LIKED SONGS) -->
-    <div v-else-if="activeLibTab === 'liked'">
-      <div v-if="likedTracks.length === 0" class="text-center py-16 bg-gradient-to-b from-rose-950/20 to-transparent rounded-2xl border border-white/5 p-6">
-        <div class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto mb-3">
-          <Icon name="solar:heart-broken-bold" class="w-6 h-6" />
-        </div>
-        <h3 class="text-base font-bold text-zinc-300 mb-1">Belum ada lagu disukai</h3>
-        <p class="text-zinc-500 text-xs max-w-xs mx-auto mb-5">Tekan ikon hati saat memutar lagu di deck player untuk mengumpulkannya di sini.</p>
-        <NuxtLink to="/search" class="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-black rounded-full hover:scale-105 transition-transform inline-block uppercase tracking-wider shadow-lg shadow-rose-600/20">
-          Temukan Lagu Favorit
-        </NuxtLink>
-      </div>
-
-      <div v-else class="space-y-1">
-        <div class="text-rose-400 text-[10px] font-black uppercase tracking-wider mb-2 px-2 flex items-center gap-1">
-          <Icon name="solar:heart-shine-bold" class="w-3.5 h-3.5" />
-          <span>Koleksi Lagu Favorit Anda</span>
-        </div>
+      <div v-else class="space-y-4">
         <SharedTrackList :tracks="likedTracks" />
       </div>
     </div>
 
-    <!-- 3. VIEW KATEGORI: ARTIS DIKUTI (ARTISTS) -->
-    <div v-else-if="activeLibTab === 'artists'">
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div 
-          v-for="(artist, index) in followedArtists" 
-          :key="index"
-          class="flex items-center gap-4 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/5 transition-colors cursor-pointer group"
+    <!-- ================= TAB 2: HISTORY ================= -->
+    <div v-else-if="activeTab === 'history'">
+      <div v-if="historyTracks.length === 0" class="py-16 text-center space-y-3 bg-white/[0.01] rounded-3xl border border-white/[0.05] p-8">
+        <div class="w-12 h-12 rounded-full bg-white/[0.04] flex items-center justify-center mx-auto text-zinc-500">
+          <Icon name="solar:history-linear" class="w-6 h-6" />
+        </div>
+        <h3 class="text-base font-bold text-white">Riwayat Masih Bersih</h3>
+        <p class="text-xs text-zinc-500 max-w-sm mx-auto leading-relaxed">
+          Semua musik yang Anda dengarkan di Noizy akan otomatis tersusun rapi di sini.
+        </p>
+        <NuxtLink
+          to="/"
+          class="inline-block mt-2 px-5 py-2 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-white border border-white/[0.08]"
         >
-          <img :src="artist.image" class="w-12 h-12 rounded-full object-cover bg-zinc-800 border border-white/5 flex-shrink-0" alt="Artist Profile" />
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-bold text-white truncate group-hover:text-rose-400 transition-colors">{{ artist.name }}</p>
-            <p class="text-[10px] font-bold text-zinc-500 mt-0.5 uppercase tracking-wider">{{ artist.type }}</p>
+          Kembali ke Beranda
+        </NuxtLink>
+      </div>
+
+      <div v-else class="space-y-4">
+        <SharedTrackList :tracks="historyTracks" />
+      </div>
+    </div>
+
+    <!-- ================= TAB 3: ARTISTS ================= -->
+    <div v-else-if="activeTab === 'artists'" class="space-y-4">
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div
+          v-for="artist in followedArtists"
+          :key="artist.name"
+          @click="navigateTo(`/artist/${artist.id}?name=${encodeURIComponent(artist.name)}`)"
+          class="p-4 rounded-2xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.04] hover:border-white/[0.1] text-center cursor-pointer transition-all duration-300 group"
+        >
+          <div class="relative w-24 h-24 mx-auto mb-3 rounded-full overflow-hidden bg-zinc-800 border border-white/10 shadow-md">
+            <img :src="artist.image" :alt="artist.name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
           </div>
-          <Icon name="solar:arrow-right-linear" class="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors mr-1" />
+          <h4 class="text-xs sm:text-sm font-semibold text-white truncate group-hover:text-rose-400 transition-colors">
+            {{ artist.name }}
+          </h4>
+          <p class="text-[10px] text-zinc-500 truncate mt-0.5 font-medium">
+            {{ artist.type }}
+          </p>
         </div>
       </div>
     </div>
 
   </div>
 </template>
-
-<style scoped>
-/* Sembunyikan scrollbar di menu kategori jika menu melebihi lebar layar HP */
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-</style>

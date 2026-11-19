@@ -1,148 +1,176 @@
-export default defineEventHandler(async (event) => {
-  const { q = '' } = getQuery(event)
+// server/api/spotify.js
+// Sumber: Deezer Public API (utama) + iTunes Search API (fallback)
+// 100% gratis, TANPA API key / token
 
-  if (!q) {
-    return {
-      error: 'Query parameter "q" is required'
-    }
-  }
+const DEEZER = 'https://api.deezer.com'
+const ITUNES = 'https://itunes.apple.com'
 
-  const clientId = process.env.SPOTIFY_CLIENT_ID
-  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
+// hapus duplikat + batasi jumlah lagu
+const dedupeAndSlice = (tracks, max = 50) =>
+  [...new Map(tracks.map(item => [item.id, item])).values()].slice(0, max)
 
+async function fetchFromDeezer(q) {
   try {
-    // TOKEN
-    const tokenResponse = await $fetch(
-      'https://accounts.spotify.com/api/token',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: clientId.trim(),
-          client_secret: clientSecret.trim()
-        })
-      }
-    )
+    // 1. SEARCH ARTIST
+    const search = await $fetch(`${DEEZER}/search/artist`, {
+      query: { q, limit: 1 }
+    })
 
-    const accessToken = tokenResponse.access_token
+    // Deezer kadang mengembalikan error dengan status 200 (misal kuota habis)
+    if (search?.error || !search?.data?.length) return null
 
-    if (!accessToken) {
-      throw new Error('Access token tidak ditemukan')
-    }
+    const artist = search.data[0]
 
-    // SEARCH ARTIST
-    const searchResult = await $fetch(
-      'https://api.spotify.com/v1/search',
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        },
-        query: {
-          q,
-          type: 'artist',
-          limit: 1
-        }
-      }
-    )
+    // 2. DETAIL ARTIST
+    const artistDetail = await $fetch(`${DEEZER}/artist/${artist.id}`)
+    if (artistDetail?.error) return null
 
-    const artist = searchResult?.artists?.items?.[0]
+    // 3. ALBUM ARTIST (mirip include_groups: 'album,single')
+    const albumsResponse = await $fetch(`${DEEZER}/artist/${artist.id}/albums`, {
+      query: { limit: 10 }
+    })
+    if (albumsResponse?.error) return null
 
-    if (!artist) {
-      return {
-        error: 'Artist not found'
-      }
-    }
-
-    // DETAIL ARTIST
-    const artistDetail = await $fetch(
-      `https://api.spotify.com/v1/artists/${artist.id}`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      }
-    )
-
-    // ALBUM ARTIST
-    const albumsResponse = await $fetch(
-      `https://api.spotify.com/v1/artists/${artist.id}/albums`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        },
-        query: {
-          include_groups: 'album,single',
-          market: 'ID',
-          limit: 10
-        }
-      }
+    const albums = (albumsResponse.data || []).filter(a =>
+      ['album', 'single'].includes(a.record_type)
     )
 
     let topTracks = []
+    const genres = new Set()
 
-    // LOOP SEMUA ALBUM
-    for (const album of albumsResponse.items || []) {
+    // 4. LOOP SEMUA ALBUM → AMBIL TRACK
+    for (const album of albums) {
       try {
-        const albumDetail = await $fetch(
-          `https://api.spotify.com/v1/albums/${album.id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`
-            }
-          }
-        )
+        const albumDetail = await $fetch(`${DEEZER}/album/${album.id}`)
 
-        const tracks = (albumDetail.tracks?.items || []).map(track => ({
+        for (const g of albumDetail.genres?.data || []) {
+          if (g?.name) genres.add(g.name)
+        }
+
+        const tracks = (albumDetail.tracks?.data || []).map(track => ({
           id: track.id,
-          title: track.name,
-          album: album.name,
+          title: track.title,
+          album: albumDetail.title || album.title,
           albumId: album.id,
-          albumCover: album.images?.[0]?.url || '',
-          spotifyUrl:
-            track.external_urls?.spotify ||
-            `https://open.spotify.com/track/${track.id}`,
-          previewUrl: track.preview_url || null,
-          durationMs: track.duration_ms || 0
+          albumCover: albumDetail.cover_xl || album.cover_medium || '',
+          previewUrl: track.preview || null, // MP3 preview 30 detik
+          durationMs: (track.duration || 0) * 1000,
+          // key "spotifyUrl" dipertahankan agar frontend lama tidak perlu diubah
+          spotifyUrl: track.link || `https://www.deezer.com/track/${track.id}`,
+          deezerUrl: track.link || `https://www.deezer.com/track/${track.id}`
         }))
 
         topTracks.push(...tracks)
       } catch (err) {
-        console.error('ALBUM ERROR:', album.name)
+        console.error('DEEZER ALBUM ERROR:', album.title)
       }
     }
 
-    // HAPUS DUPLIKAT
-    topTracks = [
-      ...new Map(
-        topTracks.map(item => [item.id, item])
-      ).values()
-    ]
-
-    // BATASI 50 LAGU
-    topTracks = topTracks.slice(0, 50)
+    topTracks = dedupeAndSlice(topTracks)
+    if (!topTracks.length) return null // biar jatuh ke fallback
 
     return {
+      source: 'deezer',
       id: artistDetail.id,
       name: artistDetail.name,
-      popularity: artistDetail.popularity || 0,
-      followers: artistDetail.followers?.total || 0,
-      genres: artistDetail.genres || [],
-      image: artistDetail.images?.[0]?.url || '',
-      spotifyUrl: artistDetail.external_urls?.spotify || '',
+      popularity: null, // Deezer tidak punya skor popularity
+      followers: artistDetail.nb_fan || 0,
+      genres: [...genres],
+      image: artistDetail.picture_xl || artistDetail.picture_big || '',
+      spotifyUrl: artistDetail.link || '',
+      deezerUrl: artistDetail.link || '',
       topTracks
     }
+  } catch (err) {
+    console.error('DEEZER ERROR:', err?.message || err)
+    return null
+  }
+}
 
-  } catch (error) {
-    console.error('SPOTIFY ERROR:', error)
+async function fetchFromItunes(q) {
+  try {
+    // 1. SEARCH ARTIST
+    const search = await $fetch(`${ITUNES}/search`, {
+      query: { term: q, entity: 'musicArtist', limit: 1, country: 'ID' }
+    })
+
+    const artist = search?.results?.[0]
+    if (!artist) return null
+
+    // 2. ALBUM ARTIST (lookup sekalian memberi detail artis)
+    const albumsRes = await $fetch(`${ITUNES}/lookup`, {
+      query: { id: artist.artistId, entity: 'album', limit: 10, country: 'ID' }
+    })
+
+    const albums = (albumsRes?.results || []).filter(
+      r => r.wrapperType === 'collection'
+    )
+
+    let topTracks = []
+    const genres = new Set()
+
+    // 3. TRACK TIAP ALBUM
+    for (const album of albums) {
+      try {
+        if (album.primaryGenreName) genres.add(album.primaryGenreName)
+
+        const detail = await $fetch(`${ITUNES}/lookup`, {
+          query: { id: album.collectionId, entity: 'song', limit: 200, country: 'ID' }
+        })
+
+        const tracks = (detail?.results || [])
+          .filter(r => r.wrapperType === 'track')
+          .sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0))
+          .map(track => ({
+            id: track.trackId,
+            title: track.trackName,
+            album: track.collectionName || album.collectionName,
+            albumId: track.collectionId,
+            albumCover: (track.artworkUrl100 || album.artworkUrl100 || '').replace(
+              '100x100',
+              '600x600'
+            ),
+            previewUrl: track.previewUrl || null, // M4A preview 30 detik
+            durationMs: track.trackTimeMillis || 0,
+            spotifyUrl: track.trackViewUrl || '' // kompatibilitas (link Apple Music)
+          }))
+
+        topTracks.push(...tracks)
+      } catch (err) {
+        console.error('ITUNES ALBUM ERROR:', album.collectionName)
+      }
+    }
+
+    topTracks = dedupeAndSlice(topTracks)
+    if (!topTracks.length) return null
 
     return {
-      error: true,
-      statusCode: error?.statusCode || 500,
-      message: error?.message,
-      data: error?.data
+      source: 'itunes',
+      id: artist.artistId,
+      name: artist.artistName,
+      popularity: null,
+      followers: null,
+      genres: [...genres],
+      image: (albums[0]?.artworkUrl100 || '').replace('100x100', '600x600'),
+      spotifyUrl: artist.artistLinkUrl || '',
+      itunesUrl: artist.artistLinkUrl || '',
+      topTracks
     }
+  } catch (err) {
+    console.error('ITUNES ERROR:', err?.message || err)
+    return null
   }
+}
+
+export default defineEventHandler(async (event) => {
+  const { q = '' } = getQuery(event)
+
+  if (!q) {
+    return { error: 'Query parameter "q" is required' }
+  }
+
+  const itunes = await fetchFromItunes(q)
+  if (itunes) return itunes
+
+  return { error: 'Artist not found' }
 })
